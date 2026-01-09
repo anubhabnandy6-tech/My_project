@@ -1,0 +1,501 @@
+import { useState, useEffect, useMemo } from 'react';
+import { base44 } from '@/api/base44Client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import GlassCard from '@/components/ui/GlassCard';
+import MonsterBattle from '@/components/quiz/MonsterBattle';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { 
+  Skull, 
+  Swords, 
+  Trophy,
+  RefreshCcw,
+  Loader2,
+  Sparkles,
+  Target
+} from 'lucide-react';
+import { toast } from 'sonner';
+import confetti from 'canvas-confetti';
+
+const difficulties = [
+  { value: 'easy', label: 'Easy', questions: 5, monsterHP: 50 },
+  { value: 'medium', label: 'Medium', questions: 10, monsterHP: 100 },
+  { value: 'hard', label: 'Hard', questions: 15, monsterHP: 150 },
+];
+
+export default function ExamMonster() {
+  const [gameState, setGameState] = useState('setup'); // setup, playing, victory, defeat
+  const [subject, setSubject] = useState('');
+  const [difficulty, setDifficulty] = useState('medium');
+  const [questions, setQuestions] = useState([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [isAnswering, setIsAnswering] = useState(false);
+  const [monsterHealth, setMonsterHealth] = useState(100);
+  const [playerShield, setPlayerShield] = useState(100);
+  const [isAttacking, setIsAttacking] = useState(false);
+  const [isHurt, setIsHurt] = useState(false);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [startTime, setStartTime] = useState(null);
+  
+  const queryClient = useQueryClient();
+  const diffConfig = difficulties.find(d => d.value === difficulty);
+  
+  // Load current study context from localStorage
+  const studyContext = useMemo(() => {
+    const history = localStorage.getItem('studybuddy_history');
+    if (history) {
+      try {
+        const sessions = JSON.parse(history);
+        if (sessions.length > 0) {
+          const latest = sessions[0];
+          return {
+            subject: latest.subjectName,
+            content: latest.generatedNotes || latest.crispNotes || ''
+          };
+        }
+      } catch (e) {
+        console.error('Failed to load study context:', e);
+      }
+    }
+    return null;
+  }, []);
+  
+  // Auto-populate subject from study context
+  useEffect(() => {
+    if (studyContext && !subject) {
+      setSubject(studyContext.subject || '');
+    }
+  }, [studyContext]);
+  
+  const generateQuizMutation = useMutation({
+    mutationFn: async () => {
+      let prompt = `Generate a quiz for a university student studying ${subject}.
+Difficulty level: ${difficulty}
+Number of questions: ${diffConfig.questions}
+
+Create multiple choice questions that test understanding, not just memorization.
+Each question should have 4 options with only one correct answer.`;
+
+      // If there's study context, use it to generate targeted questions
+      if (studyContext && studyContext.content) {
+        prompt += `\n\nBase the questions on this study material:\n\n${studyContext.content.substring(0, 3000)}`;
+      }
+
+      prompt += '\n\nReturn in this exact JSON format:';
+
+      const response = await base44.integrations.Core.InvokeLLM({
+        prompt,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            questions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  question: { type: "string" },
+                  options: { 
+                    type: "array",
+                    items: { type: "string" }
+                  },
+                  correct_index: { type: "number" },
+                  explanation: { type: "string" }
+                }
+              }
+            }
+          }
+        }
+      });
+      
+      return response.questions;
+    },
+    onSuccess: (data) => {
+      setQuestions(data);
+      setMonsterHealth(diffConfig.monsterHP);
+      setPlayerShield(100);
+      setCurrentQuestionIndex(0);
+      setCorrectAnswers(0);
+      setStartTime(Date.now());
+      setGameState('playing');
+      toast.success('Battle begins!');
+    },
+    onError: () => {
+      toast.error('Failed to generate quiz. Try again!');
+    }
+  });
+  
+  const saveResultMutation = useMutation({
+    mutationFn: (result) => base44.entities.QuizResult.create(result),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quizResults'] });
+    }
+  });
+  
+  const handleAnswer = async (index) => {
+    if (isAnswering || selectedAnswer !== null) return;
+    
+    setSelectedAnswer(index);
+    setIsAnswering(true);
+    
+    const currentQuestion = questions[currentQuestionIndex];
+    const isCorrect = index === currentQuestion.correct_index;
+    
+    if (isCorrect) {
+      setIsHurt(true);
+      const damage = 10;
+      const newHealth = Math.max(0, monsterHealth - damage);
+      setMonsterHealth(newHealth);
+      setCorrectAnswers(prev => prev + 1);
+      toast.success('Correct! You dealt damage!');
+      
+      if (newHealth <= 0) {
+        setTimeout(() => {
+          setGameState('victory');
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+          saveResultMutation.mutate({
+            subject,
+            total_questions: questions.length,
+            correct_answers: correctAnswers + 1,
+            monster_defeated: true,
+            time_taken_seconds: Math.floor((Date.now() - startTime) / 1000),
+            difficulty
+          });
+        }, 1000);
+        return;
+      }
+    } else {
+      setIsAttacking(true);
+      const newShield = Math.max(0, playerShield - 20);
+      setPlayerShield(newShield);
+      toast.error('Wrong! Monster attacks!');
+      
+      if (newShield <= 0) {
+        setTimeout(() => {
+          setGameState('defeat');
+          saveResultMutation.mutate({
+            subject,
+            total_questions: questions.length,
+            correct_answers: correctAnswers,
+            monster_defeated: false,
+            time_taken_seconds: Math.floor((Date.now() - startTime) / 1000),
+            difficulty
+          });
+        }, 1000);
+        return;
+      }
+    }
+    
+    setTimeout(() => {
+      setIsHurt(false);
+      setIsAttacking(false);
+    }, 500);
+    
+    setTimeout(() => {
+      if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestionIndex(prev => prev + 1);
+        setSelectedAnswer(null);
+        setIsAnswering(false);
+      } else {
+        // All questions answered, monster still alive
+        if (monsterHealth > 0) {
+          setGameState('defeat');
+          saveResultMutation.mutate({
+            subject,
+            total_questions: questions.length,
+            correct_answers: correctAnswers,
+            monster_defeated: false,
+            time_taken_seconds: Math.floor((Date.now() - startTime) / 1000),
+            difficulty
+          });
+        }
+      }
+    }, 1500);
+  };
+  
+  const resetGame = () => {
+    setGameState('setup');
+    setQuestions([]);
+    setCurrentQuestionIndex(0);
+    setSelectedAnswer(null);
+    setMonsterHealth(100);
+    setPlayerShield(100);
+    setCorrectAnswers(0);
+  };
+  
+  const currentQuestion = questions[currentQuestionIndex];
+  
+  return (
+    <div className="p-6 lg:p-8 max-w-4xl mx-auto">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8"
+      >
+        <h1 className="text-3xl lg:text-4xl font-bold text-[#002366] flex items-center gap-3">
+          <Skull className="w-8 h-8" />
+          Exam Monster
+          <span className="text-[#FFD700]">
+            <Swords className="w-6 h-6" />
+          </span>
+        </h1>
+        <p className="text-gray-600 mt-2">
+          Battle the monster by answering questions correctly!
+        </p>
+      </motion.div>
+      
+      <AnimatePresence mode="wait">
+        {/* Setup Screen */}
+        {gameState === 'setup' && (
+          <motion.div
+            key="setup"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+          >
+            <GlassCard className="p-8">
+              <div className="text-center mb-8">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-600 to-purple-900 flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-purple-500/30">
+                  <Skull className="w-12 h-12 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800">Prepare for Battle!</h2>
+                <p className="text-gray-600 mt-2">
+                  {studyContext 
+                    ? `Battle monster with questions from: ${studyContext.subject}` 
+                    : 'Choose your subject and difficulty to begin'}
+                </p>
+                {studyContext && (
+                  <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                    <Sparkles className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-green-800 font-medium">
+                      Dynamic quiz from your latest notes!
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="max-w-md mx-auto space-y-6">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Subject / Topic
+                  </label>
+                  <Input
+                    placeholder="e.g., Data Structures, Organic Chemistry..."
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="text-center"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Difficulty
+                  </label>
+                  <Select value={difficulty} onValueChange={setDifficulty}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {difficulties.map((d) => (
+                        <SelectItem key={d.value} value={d.value}>
+                          {d.label} - {d.questions} questions, {d.monsterHP} HP
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <Button
+                  onClick={() => generateQuizMutation.mutate()}
+                  disabled={!subject.trim() || generateQuizMutation.isPending}
+                  className="w-full py-6 text-lg bg-gradient-to-r from-purple-600 to-purple-800 hover:from-purple-700 hover:to-purple-900"
+                >
+                  {generateQuizMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Summoning Monster...
+                    </>
+                  ) : (
+                    <>
+                      <Swords className="w-5 h-5 mr-2" />
+                      Start Battle!
+                    </>
+                  )}
+                </Button>
+              </div>
+            </GlassCard>
+          </motion.div>
+        )}
+        
+        {/* Playing Screen */}
+        {gameState === 'playing' && currentQuestion && (
+          <motion.div
+            key="playing"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <GlassCard className="p-6 lg:p-8">
+              <MonsterBattle
+                monsterHealth={monsterHealth}
+                maxMonsterHealth={diffConfig.monsterHP}
+                playerShield={playerShield}
+                maxPlayerShield={100}
+                isAttacking={isAttacking}
+                isHurt={isHurt}
+              />
+              
+              {/* Question Progress */}
+              <div className="mt-8 mb-4">
+                <div className="flex justify-between text-sm text-gray-500 mb-2">
+                  <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
+                  <span className="flex items-center gap-1">
+                    <Target className="w-4 h-4" />
+                    {correctAnswers} correct
+                  </span>
+                </div>
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-[#002366]"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+              
+              {/* Question */}
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                  {currentQuestion.question}
+                </h3>
+                
+                <div className="grid gap-3">
+                  {currentQuestion.options.map((option, index) => {
+                    const isSelected = selectedAnswer === index;
+                    const isCorrect = index === currentQuestion.correct_index;
+                    const showResult = selectedAnswer !== null;
+                    
+                    return (
+                      <motion.button
+                        key={index}
+                        onClick={() => handleAnswer(index)}
+                        disabled={selectedAnswer !== null}
+                        whileHover={{ scale: selectedAnswer === null ? 1.02 : 1 }}
+                        whileTap={{ scale: selectedAnswer === null ? 0.98 : 1 }}
+                        className={`p-4 rounded-xl text-left transition-all border-2 ${
+                          showResult
+                            ? isCorrect
+                              ? 'bg-green-100 border-green-500 text-green-800'
+                              : isSelected
+                                ? 'bg-red-100 border-red-500 text-red-800'
+                                : 'bg-gray-50 border-gray-200 text-gray-600'
+                            : 'bg-white border-gray-200 hover:border-[#002366] hover:bg-blue-50'
+                        }`}
+                      >
+                        <span className="font-medium">{String.fromCharCode(65 + index)}.</span> {option}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+                
+                {/* Explanation */}
+                <AnimatePresence>
+                  {selectedAnswer !== null && currentQuestion.explanation && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 p-4 bg-blue-50 rounded-xl"
+                    >
+                      <p className="text-sm text-[#002366]">
+                        <strong>Explanation:</strong> {currentQuestion.explanation}
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </GlassCard>
+          </motion.div>
+        )}
+        
+        {/* Victory Screen */}
+        {gameState === 'victory' && (
+          <motion.div
+            key="victory"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+          >
+            <GlassCard className="p-8 text-center">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", bounce: 0.5 }}
+              >
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#FFD700] to-amber-500 flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-amber-500/30">
+                  <Trophy className="w-12 h-12 text-[#002366]" />
+                </div>
+              </motion.div>
+              <h2 className="text-3xl font-bold text-[#002366] mb-2">Victory!</h2>
+              <p className="text-gray-600 mb-6">You defeated the monster!</p>
+              
+              <div className="bg-green-50 rounded-xl p-4 mb-6 inline-block">
+                <p className="text-green-800 font-semibold">
+                  {correctAnswers} / {questions.length} correct answers
+                </p>
+              </div>
+              
+              <div className="flex justify-center gap-4">
+                <Button variant="outline" onClick={resetGame}>
+                  <RefreshCcw className="w-5 h-5 mr-2" />
+                  Play Again
+                </Button>
+              </div>
+            </GlassCard>
+          </motion.div>
+        )}
+        
+        {/* Defeat Screen */}
+        {gameState === 'defeat' && (
+          <motion.div
+            key="defeat"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+          >
+            <GlassCard className="p-8 text-center">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-red-500/30 animate-pulse">
+                <Skull className="w-12 h-12 text-white" />
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-2">Defeated!</h2>
+              <p className="text-gray-600 mb-6">The monster won this time. Try again!</p>
+              
+              <div className="bg-amber-50 rounded-xl p-4 mb-6 inline-block">
+                <p className="text-amber-800 font-semibold">
+                  {correctAnswers} / {questions.length} correct answers
+                </p>
+              </div>
+              
+              <div className="flex justify-center gap-4">
+                <Button onClick={resetGame} className="bg-[#002366]">
+                  <RefreshCcw className="w-5 h-5 mr-2" />
+                  Try Again
+                </Button>
+              </div>
+            </GlassCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
