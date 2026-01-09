@@ -1,0 +1,35 @@
+{
+  "name": "QuizResult",
+  "type": "object",
+  "properties": {
+    "subject": {
+      "type": "string"
+    },
+    "total_questions": {
+      "type": "number"
+    },
+    "correct_answers": {
+      "type": "number"
+    },
+    "monster_defeated": {
+      "type": "boolean",
+      "default": false
+    },
+    "time_taken_seconds": {
+      "type": "number"
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": [
+        "easy",
+        "medium",
+        "hard"
+      ]
+    }
+  },
+  "required": [
+    "subject",
+    "total_questions",
+    "correct_answers"
+  ]
+}
