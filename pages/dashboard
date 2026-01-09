@@ -1,0 +1,275 @@
+import { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+import { motion } from 'framer-motion';
+import GlassCard from '@/components/ui/GlassCard';
+import MasteryChart from '@/components/dashboard/MasteryChart';
+import { 
+  BookOpen, 
+  Layers, 
+  Skull, 
+  Trophy,
+  Flame,
+  ChevronRight,
+  Sparkles,
+  GraduationCap
+} from 'lucide-react';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue 
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+
+const schools = [
+  { value: 'Engineering', label: 'School of Engineering', icon: '⚙️' },
+  { value: 'Law', label: 'School of Law', icon: '⚖️' },
+  { value: 'Pharmacy', label: 'School of Pharmacy', icon: '💊' },
+  { value: 'Management', label: 'School of Management', icon: '📊' },
+  { value: 'Science', label: 'School of Science', icon: '🔬' },
+  { value: 'Arts', label: 'School of Arts', icon: '🎨' },
+  { value: 'Education', label: 'School of Education', icon: '📚' },
+];
+
+const quickActions = [
+  { 
+    name: 'Syllabus AI', 
+    description: 'Generate smart notes from your syllabus',
+    icon: BookOpen, 
+    page: 'SyllabusAI',
+    gradient: 'from-blue-500 to-indigo-600'
+  },
+  { 
+    name: 'Flashcards', 
+    description: 'Review with interactive flip cards',
+    icon: Layers, 
+    page: 'Flashcards',
+    gradient: 'from-emerald-500 to-teal-600'
+  },
+  { 
+    name: 'Exam Monster', 
+    description: 'Battle the quiz monster',
+    icon: Skull, 
+    page: 'ExamMonster',
+    gradient: 'from-purple-500 to-pink-600'
+  },
+];
+
+export default function Dashboard() {
+  const [selectedSchool, setSelectedSchool] = useState('Engineering');
+  const [user, setUser] = useState(null);
+  
+  useEffect(() => {
+    base44.auth.me().then(setUser).catch(() => {});
+  }, []);
+  
+  const { data: progress } = useQuery({
+    queryKey: ['userProgress'],
+    queryFn: () => base44.entities.UserProgress.list(),
+    initialData: [],
+  });
+  
+  const { data: quizResults } = useQuery({
+    queryKey: ['quizResults'],
+    queryFn: () => base44.entities.QuizResult.list('-created_date', 5),
+    initialData: [],
+  });
+  
+  const { data: flashcards } = useQuery({
+    queryKey: ['flashcards'],
+    queryFn: () => base44.entities.Flashcard.list(),
+    initialData: [],
+  });
+  
+  const userProgress = progress?.[0] || {};
+  const masteryPercentage = userProgress.mastery_percentage || 0;
+  const monstersDefeated = userProgress.monsters_defeated || 0;
+  const streakDays = userProgress.streak_days || 0;
+  
+  const stats = [
+    { label: 'Flashcards', value: flashcards.length, icon: Layers, color: 'text-emerald-500' },
+    { label: 'Quizzes Done', value: quizResults.length, icon: Trophy, color: 'text-amber-500' },
+    { label: 'Monsters Defeated', value: monstersDefeated, icon: Skull, color: 'text-purple-500' },
+    { label: 'Day Streak', value: streakDays, icon: Flame, color: 'text-orange-500' },
+  ];
+  
+  return (
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* Welcome Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8"
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl lg:text-4xl font-bold text-[#002366] flex items-center gap-3">
+              Welcome back
+              {user?.full_name && `, ${user.full_name.split(' ')[0]}`}
+              <Sparkles className="w-8 h-8 text-[#FFD700]" />
+            </h1>
+            <p className="text-gray-600 mt-2">Ready to conquer your studies today?</p>
+          </div>
+          
+          <Select value={selectedSchool} onValueChange={setSelectedSchool}>
+            <SelectTrigger className="w-full lg:w-72 bg-white/80 backdrop-blur border-[#002366]/20">
+              <GraduationCap className="w-5 h-5 mr-2 text-[#002366]" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {schools.map((school) => (
+                <SelectItem key={school.value} value={school.value}>
+                  <span className="flex items-center gap-2">
+                    <span>{school.icon}</span>
+                    <span>{school.label}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </motion.div>
+      
+      {/* Main Content Grid */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Left Column - Mastery Progress */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <GlassCard className="p-6 h-full">
+            <h2 className="text-lg font-semibold text-[#002366] mb-6">Mastery Progress</h2>
+            <div className="flex flex-col items-center">
+              <MasteryChart percentage={masteryPercentage} />
+              <div className="mt-6 text-center">
+                <p className="text-gray-600 text-sm">
+                  {masteryPercentage < 30 
+                    ? "Keep going! Every step counts."
+                    : masteryPercentage < 60
+                      ? "Great progress! You're on track."
+                      : masteryPercentage < 90
+                        ? "Excellent work! Almost there!"
+                        : "Outstanding! You've mastered this!"}
+                </p>
+              </div>
+            </div>
+          </GlassCard>
+        </motion.div>
+        
+        {/* Middle Column - Stats */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="lg:col-span-2"
+        >
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {stats.map((stat, index) => (
+              <GlassCard key={stat.label} className="p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2 + index * 0.1 }}
+                >
+                  <div className={`w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mb-3 ${stat.color}`}>
+                    <stat.icon className="w-5 h-5" />
+                  </div>
+                  <p className="text-2xl font-bold text-[#002366]">{stat.value}</p>
+                  <p className="text-sm text-gray-500">{stat.label}</p>
+                </motion.div>
+              </GlassCard>
+            ))}
+          </div>
+          
+          {/* Quick Actions */}
+          <div className="mt-6">
+            <h2 className="text-lg font-semibold text-[#002366] mb-4">Quick Actions</h2>
+            <div className="grid lg:grid-cols-3 gap-4">
+              {quickActions.map((action, index) => (
+                <motion.div
+                  key={action.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 + index * 0.1 }}
+                >
+                  <Link to={createPageUrl(action.page)}>
+                    <GlassCard className="p-5 group cursor-pointer">
+                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.gradient} flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                        <action.icon className="w-6 h-6 text-white" />
+                      </div>
+                      <h3 className="font-semibold text-[#002366] group-hover:text-[#003d99] transition-colors flex items-center gap-2">
+                        {action.name}
+                        <ChevronRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">{action.description}</p>
+                    </GlassCard>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      </div>
+      
+      {/* Recent Activity */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="mt-8"
+      >
+        <GlassCard className="p-6">
+          <h2 className="text-lg font-semibold text-[#002366] mb-4">Recent Quiz Results</h2>
+          {quizResults.length > 0 ? (
+            <div className="space-y-3">
+              {quizResults.slice(0, 3).map((result, index) => (
+                <div 
+                  key={result.id}
+                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      result.monster_defeated 
+                        ? 'bg-green-100 text-green-600' 
+                        : 'bg-red-100 text-red-600'
+                    }`}>
+                      {result.monster_defeated ? <Trophy className="w-5 h-5" /> : <Skull className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-800">{result.subject || 'Quiz'}</p>
+                      <p className="text-sm text-gray-500">
+                        {result.correct_answers}/{result.total_questions} correct
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-sm font-semibold px-3 py-1 rounded-full ${
+                    result.monster_defeated 
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {result.monster_defeated ? 'Victory!' : 'Try Again'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Skull className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500">No quiz attempts yet</p>
+              <Link to={createPageUrl('ExamMonster')}>
+                <Button className="mt-4 bg-[#002366] hover:bg-[#003d99]">
+                  Start Your First Battle
+                </Button>
+              </Link>
+            </div>
+          )}
+        </GlassCard>
+      </motion.div>
+    </div>
+  );
+}
