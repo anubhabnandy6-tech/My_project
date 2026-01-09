@@ -1,0 +1,43 @@
+{
+  "name": "UserProgress",
+  "type": "object",
+  "properties": {
+    "selected_school": {
+      "type": "string",
+      "enum": [
+        "Engineering",
+        "Law",
+        "Pharmacy",
+        "Management",
+        "Science",
+        "Arts",
+        "Education"
+      ]
+    },
+    "total_flashcards_reviewed": {
+      "type": "number",
+      "default": 0
+    },
+    "total_quizzes_completed": {
+      "type": "number",
+      "default": 0
+    },
+    "monsters_defeated": {
+      "type": "number",
+      "default": 0
+    },
+    "mastery_percentage": {
+      "type": "number",
+      "default": 0
+    },
+    "streak_days": {
+      "type": "number",
+      "default": 0
+    },
+    "last_study_date": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": []
+}
