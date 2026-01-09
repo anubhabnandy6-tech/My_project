@@ -1,0 +1,11 @@
+import { AlertTriangle } from 'lucide-react';
+
+export default function DisclaimerBanner() {
+  return (
+    <div className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 text-[#002366] px-4 py-2.5 flex items-center justify-center gap-2 font-semibold text-sm shadow-lg">
+      <AlertTriangle className="w-5 h-5 animate-pulse" />
+      <span>Shortcut is not the path to get good grades. Use this as a revision supplement.</span>
+      <AlertTriangle className="w-5 h-5 animate-pulse" />
+    </div>
+  );
+}
