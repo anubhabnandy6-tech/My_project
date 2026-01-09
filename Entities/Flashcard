@@ -1,0 +1,38 @@
+{
+  "name": "Flashcard",
+  "type": "object",
+  "properties": {
+    "question": {
+      "type": "string",
+      "description": "Front of the flashcard"
+    },
+    "answer": {
+      "type": "string",
+      "description": "Back of the flashcard"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "confidence_level": {
+      "type": "string",
+      "enum": [
+        "easy",
+        "medium",
+        "hard"
+      ],
+      "default": "medium"
+    },
+    "times_reviewed": {
+      "type": "number",
+      "default": 0
+    },
+    "last_reviewed": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "question",
+    "answer"
+  ]
+}
