@@ -1,0 +1,40 @@
+{
+  "name": "StudySession",
+  "type": "object",
+  "properties": {
+    "school": {
+      "type": "string",
+      "enum": [
+        "Engineering",
+        "Law",
+        "Pharmacy",
+        "Management",
+        "Science",
+        "Arts",
+        "Education"
+      ],
+      "description": "Selected Adamas school"
+    },
+    "syllabus_text": {
+      "type": "string",
+      "description": "Pasted syllabus content"
+    },
+    "generated_notes": {
+      "type": "string",
+      "description": "AI-generated notes in markdown"
+    },
+    "mermaid_diagrams": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Generated Mermaid.js code for flowcharts"
+    },
+    "subject_name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "school"
+  ]
+}
