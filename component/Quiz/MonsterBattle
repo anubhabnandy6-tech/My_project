@@ -1,0 +1,118 @@
+import { motion, AnimatePresence } from 'framer-motion';
+import { Skull, Shield, Heart, Zap } from 'lucide-react';
+
+export default function MonsterBattle({ 
+  monsterHealth, 
+  maxMonsterHealth,
+  playerShield,
+  maxPlayerShield,
+  isAttacking,
+  isHurt 
+}) {
+  const monsterHealthPercent = (monsterHealth / maxMonsterHealth) * 100;
+  const shieldPercent = (playerShield / maxPlayerShield) * 100;
+  
+  return (
+    <div className="flex flex-col items-center gap-6">
+      {/* Monster Section */}
+      <div className="relative">
+        <motion.div
+          animate={{
+            scale: isHurt ? [1, 0.9, 1] : isAttacking ? [1, 1.1, 1] : 1,
+            x: isHurt ? [-10, 10, -10, 10, 0] : 0,
+          }}
+          transition={{ duration: 0.3 }}
+          className="relative"
+        >
+          {/* Monster Icon */}
+          <div className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
+            monsterHealth <= maxMonsterHealth * 0.3 
+              ? 'bg-gradient-to-br from-red-500 to-red-700 animate-pulse' 
+              : 'bg-gradient-to-br from-purple-600 to-purple-900'
+          } shadow-2xl shadow-purple-500/50`}>
+            <Skull className="w-16 h-16 text-white" />
+          </div>
+          
+          {/* Damage indicator */}
+          <AnimatePresence>
+            {isHurt && (
+              <motion.div
+                initial={{ opacity: 0, y: 0 }}
+                animate={{ opacity: 1, y: -30 }}
+                exit={{ opacity: 0, y: -50 }}
+                className="absolute -top-4 left-1/2 -translate-x-1/2 text-red-500 font-bold text-2xl"
+              >
+                -10
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
+          {/* Attack indicator */}
+          <AnimatePresence>
+            {isAttacking && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1.5 }}
+                exit={{ opacity: 0, scale: 0 }}
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+              >
+                <Zap className="w-20 h-20 text-yellow-400" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+        
+        {/* Monster Health Bar */}
+        <div className="mt-4 w-full">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-sm font-medium text-gray-600 flex items-center gap-1">
+              <Heart className="w-4 h-4 text-red-500" />
+              Monster HP
+            </span>
+            <span className="text-sm font-bold text-gray-800">{monsterHealth}/{maxMonsterHealth}</span>
+          </div>
+          <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+            <motion.div
+              className={`h-full rounded-full transition-all ${
+                monsterHealthPercent > 60 
+                  ? 'bg-gradient-to-r from-green-400 to-green-600' 
+                  : monsterHealthPercent > 30 
+                    ? 'bg-gradient-to-r from-yellow-400 to-yellow-600'
+                    : 'bg-gradient-to-r from-red-400 to-red-600'
+              }`}
+              initial={{ width: '100%' }}
+              animate={{ width: `${monsterHealthPercent}%` }}
+              transition={{ duration: 0.5 }}
+            />
+          </div>
+        </div>
+      </div>
+      
+      {/* Divider */}
+      <div className="w-full flex items-center gap-4">
+        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
+        <span className="text-gray-400 font-bold text-sm">VS</span>
+        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
+      </div>
+      
+      {/* Player Shield */}
+      <div className="w-full">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-sm font-medium text-gray-600 flex items-center gap-1">
+            <Shield className="w-4 h-4 text-blue-500" />
+            Your Shield
+          </span>
+          <span className="text-sm font-bold text-gray-800">{playerShield}/{maxPlayerShield}</span>
+        </div>
+        <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+          <motion.div
+            className="h-full bg-gradient-to-r from-[#002366] to-blue-500 rounded-full"
+            initial={{ width: '100%' }}
+            animate={{ width: `${shieldPercent}%` }}
+            transition={{ duration: 0.5 }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
